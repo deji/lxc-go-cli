@@ -1,0 +1,17 @@
+{
+  "name": "Go Dev Container",
+  "image": "mcr.microsoft.com/devcontainers/go:1.23",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  "settings": {
+    "go.gopath": "/go"
+  },
+  "mounts": [],
+  "postCreateCommand": "go mod tidy",
+  "remoteUser": "vscode",
+  "postStartCommand": "sudo chown -R vscode:vscode /workspaces/lxc-go-cli"
+}
+  
