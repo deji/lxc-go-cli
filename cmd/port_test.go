@@ -475,7 +475,7 @@ func TestConfigurePortForwardingForProtocol(t *testing.T) {
 	expectedCmd := []string{
 		"lxc", "config", "device", "add", "test-container",
 		"test-container-8080-80-tcp", "proxy",
-		"connect=tcp:0.0.0.0:8080", "listen=tcp:0.0.0.0:80",
+		"connect=tcp:0.0.0.0:80", "listen=tcp:0.0.0.0:8080",
 	}
 
 	if len(cmd) != len(expectedCmd) {
@@ -518,7 +518,7 @@ func TestConfigurePortForwardingBothProtocols(t *testing.T) {
 	if !contains(strings.Join(tcpCmd, " "), "test-container-8080-80-tcp") {
 		t.Error("first command should be for TCP")
 	}
-	if !contains(strings.Join(tcpCmd, " "), "connect=tcp:0.0.0.0:8080") {
+	if !contains(strings.Join(tcpCmd, " "), "connect=tcp:0.0.0.0:80") {
 		t.Error("TCP command should have correct connect parameter")
 	}
 
@@ -527,7 +527,7 @@ func TestConfigurePortForwardingBothProtocols(t *testing.T) {
 	if !contains(strings.Join(udpCmd, " "), "test-container-8080-80-udp") {
 		t.Error("second command should be for UDP")
 	}
-	if !contains(strings.Join(udpCmd, " "), "connect=udp:0.0.0.0:8080") {
+	if !contains(strings.Join(udpCmd, " "), "connect=udp:0.0.0.0:80") {
 		t.Error("UDP command should have correct connect parameter")
 	}
 }
@@ -780,7 +780,7 @@ func TestPortAddCommandFlags(t *testing.T) {
 func TestPortAvailabilityIntegration(t *testing.T) {
 	// Test that port availability checking is working in the command flow
 	ctx := context.Background()
-	
+
 	// Create a mock that simulates port availability checking
 	manager := &MockContainerPortManager{
 		ExistingContainers: map[string]bool{

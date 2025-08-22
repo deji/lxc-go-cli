@@ -1,6 +1,17 @@
 # Makefile for lxc-go-cli
 
-.PHONY: test test-unit test-integration test-all coverage clean build help
+# Version configuration
+VERSION_MAJOR := 1
+VERSION_MINOR := $(shell git rev-parse --short=4 HEAD 2>/dev/null || echo "dev")
+VERSION_PATCH := $(shell date +%Y%m%d%H%M%S)
+VERSION := $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
+GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME := $(shell date +%Y%m%d%H%M%S)
+
+# Build flags
+LDFLAGS := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
+
+.PHONY: test test-unit test-integration test-all coverage clean build help version
 
 # Default target
 help: ## Show this help message
@@ -57,9 +68,15 @@ coverage-helpers: ## Run coverage tests for helpers package specifically
 	@echo "Helpers coverage report generated: helpers_coverage.html"
 
 # Build
-build: ## Build the binary
-	@echo "Building lxc-go-cli..."
-	go build -o lxc-go-cli .
+build: ## Build the binary with version information
+	@echo "Building lxc-go-cli version $(VERSION)..."
+	go build -ldflags "$(LDFLAGS)" -o lxc-go-cli .
+
+# Show version info
+version: ## Show version information that would be built
+	@echo "Version: $(VERSION)"
+	@echo "Git Commit: $(GIT_COMMIT)"
+	@echo "Build Time: $(BUILD_TIME)"
 
 # Clean
 clean: ## Clean build artifacts and test files

@@ -231,8 +231,8 @@ func configurePortForwardingForProtocol(ctx context.Context, manager ContainerPo
 	}
 
 	deviceName := fmt.Sprintf("%s-%s-%s-%s", containerName, hostPort, containerPort, protocol)
-	connectAddr := fmt.Sprintf("%s:0.0.0.0:%s", protocol, hostPort)
-	listenAddr := fmt.Sprintf("%s:0.0.0.0:%s", protocol, containerPort)
+	connectAddr := fmt.Sprintf("%s:0.0.0.0:%s", protocol, containerPort) // Container side
+	listenAddr := fmt.Sprintf("%s:0.0.0.0:%s", protocol, hostPort)       // Host side
 
 	logger.Info("Configuring %s port forwarding: %s:%s -> %s:%s",
 		strings.ToUpper(protocol), "0.0.0.0", hostPort, containerName, containerPort)
