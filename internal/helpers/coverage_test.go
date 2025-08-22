@@ -823,6 +823,25 @@ func TestRealLXC_WrapperFunctions(t *testing.T) {
 
 	err = real.ConfigureContainerSecurity(ctx, "test")
 	t.Logf("RealLXC.ConfigureContainerSecurity: %v", err)
+
+	// Test new GPU and password wrapper functions
+	_, err = real.GetContainerGPUStatus(ctx, "test")
+	t.Logf("RealLXC.GetContainerGPUStatus: %v", err)
+
+	err = real.EnableContainerGPU(ctx, "test")
+	t.Logf("RealLXC.EnableContainerGPU: %v", err)
+
+	err = real.DisableContainerGPU(ctx, "test")
+	t.Logf("RealLXC.DisableContainerGPU: %v", err)
+
+	err = real.StoreContainerPassword(ctx, "test", "password123")
+	t.Logf("RealLXC.StoreContainerPassword: %v", err)
+
+	_, err = real.GetContainerPassword(ctx, "test")
+	t.Logf("RealLXC.GetContainerPassword: %v", err)
+
+	err = real.SetUserPassword(ctx, "test", "app", "password123")
+	t.Logf("RealLXC.SetUserPassword: %v", err)
 }
 
 // Test more mock functionality to increase coverage
@@ -883,5 +902,136 @@ func TestContextScenarios(t *testing.T) {
 	err := mock.CreateContainer(ctx, "test-deadline", "ubuntu", "24.04", "amd64", "default-btrfs")
 	if err != nil {
 		t.Errorf("Should work with deadline context: %v", err)
+	}
+}
+
+func TestRunHostCommand(t *testing.T) {
+	tests := []struct {
+		name          string
+		args          []string
+		expectedError string
+	}{
+		{
+			name:          "no arguments",
+			args:          []string{},
+			expectedError: "no command provided",
+		},
+		{
+			name:          "valid command",
+			args:          []string{"echo", "hello"},
+			expectedError: "", // echo should succeed
+		},
+		{
+			name:          "invalid command",
+			args:          []string{"nonexistent-command-123"},
+			expectedError: "command failed", // Should fail with command not found
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			err := RunHostCommand(ctx, tt.args...)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestMockLXC_GPUAndPasswordFunctions(t *testing.T) {
+	mock := NewMockLXC()
+	mock.AddContainer("test-container")
+	ctx := context.Background()
+
+	// Test GPU functions
+	status, err := mock.GetContainerGPUStatus(ctx, "test-container")
+	if err != nil {
+		t.Errorf("GetContainerGPUStatus should not error: %v", err)
+	}
+	t.Logf("GPU status: %+v", status)
+
+	err = mock.EnableContainerGPU(ctx, "test-container")
+	if err != nil {
+		t.Errorf("EnableContainerGPU should not error: %v", err)
+	}
+
+	err = mock.DisableContainerGPU(ctx, "test-container")
+	if err != nil {
+		t.Errorf("DisableContainerGPU should not error: %v", err)
+	}
+
+	// Test password functions
+	err = mock.StoreContainerPassword(ctx, "test-container", "testpass123")
+	if err != nil {
+		t.Errorf("StoreContainerPassword should not error: %v", err)
+	}
+
+	password, err := mock.GetContainerPassword(ctx, "test-container")
+	if err != nil {
+		t.Errorf("GetContainerPassword should not error: %v", err)
+	}
+	t.Logf("Retrieved password: %s", password)
+
+	err = mock.SetUserPassword(ctx, "test-container", "app", "testpass123")
+	if err != nil {
+		t.Errorf("SetUserPassword should not error: %v", err)
+	}
+
+	// Test setting GPU state and passwords
+	mock.SetGPUState("test-container", true, true)
+	mock.SetPassword("test-container", "newpass456")
+
+	// Test retrieving after setting
+	password2, err := mock.GetContainerPassword(ctx, "test-container")
+	if err != nil {
+		t.Errorf("GetContainerPassword should not error after setting: %v", err)
+	}
+	if password2 != "newpass456" {
+		t.Errorf("Expected password 'newpass456', got '%s'", password2)
+	}
+
+	// Test additional mock functionality to increase coverage
+	mock.SetError("storepassword", fmt.Errorf("test error"))
+	err = mock.StoreContainerPassword(ctx, "test-container", "password")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
+	}
+
+	mock.SetError("getpassword", fmt.Errorf("test error"))
+	_, err = mock.GetContainerPassword(ctx, "test-container")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
+	}
+
+	mock.SetError("setpassword", fmt.Errorf("test error"))
+	err = mock.SetUserPassword(ctx, "test-container", "app", "password")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
+	}
+
+	mock.SetError("enablegpu", fmt.Errorf("test error"))
+	err = mock.EnableContainerGPU(ctx, "test-container")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
+	}
+
+	mock.SetError("disablegpu", fmt.Errorf("test error"))
+	err = mock.DisableContainerGPU(ctx, "test-container")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
+	}
+
+	mock.SetError("gpustatus", fmt.Errorf("test error"))
+	_, err = mock.GetContainerGPUStatus(ctx, "test-container")
+	if err == nil {
+		t.Error("Expected error when SetError is configured")
 	}
 }

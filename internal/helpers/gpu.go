@@ -28,6 +28,10 @@ type ContainerConfig struct {
 
 // GetContainerGPUStatus retrieves the GPU configuration status for a container
 func GetContainerGPUStatus(containerName string) (*GPUStatus, error) {
+	if containerName == "" {
+		return nil, fmt.Errorf("container name is required")
+	}
+
 	// Use standard lxc config show command (outputs YAML by default)
 	cmd := exec.Command("lxc", "config", "show", containerName)
 	logger.Debug("Getting GPU status for container: lxc config show %s", containerName)
@@ -82,6 +86,10 @@ func parseGPUStatus(yamlOutput string) (*GPUStatus, error) {
 
 // EnableContainerGPU enables GPU access for a container (idempotent)
 func EnableContainerGPU(containerName string) error {
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+
 	logger.Info("Enabling GPU for container '%s'...", containerName)
 
 	// Check current status
@@ -126,6 +134,10 @@ func EnableContainerGPU(containerName string) error {
 
 // DisableContainerGPU disables GPU access for a container (idempotent)
 func DisableContainerGPU(containerName string) error {
+	if containerName == "" {
+		return fmt.Errorf("container name is required")
+	}
+
 	logger.Info("Disabling GPU for container '%s'...", containerName)
 
 	// Check current status

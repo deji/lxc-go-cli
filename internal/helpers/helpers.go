@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -310,6 +311,27 @@ func EnsureBtrfsStoragePool() error {
 func SetDefaultStoragePool(name string) error {
 	cmd := exec.Command("lxc", "storage", "set-default", name)
 	return cmd.Run()
+}
+
+// RunHostCommand executes a command directly on the host with context support
+func RunHostCommand(ctx context.Context, args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no command provided")
+	}
+
+	// Create command with context for timeout/cancellation support
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+
+	logger.Debug("Executing host command: %v", args)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Debug("Host command failed with output: %s", string(output))
+		return fmt.Errorf("command failed: %w (output: %s)", err, string(output))
+	}
+
+	logger.Debug("Host command succeeded with output: %s", string(output))
+	return nil
 }
 
 // ConfigureContainerSecurity sets up security settings needed for Docker

@@ -292,6 +292,111 @@ func TestFormatGPUStatus(t *testing.T) {
 	}
 }
 
+func TestGetContainerGPUStatus(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "valid container name",
+			containerName: "test-container",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := GetContainerGPUStatus(tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestEnableContainerGPU(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "valid container name",
+			containerName: "test-container",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := EnableContainerGPU(tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestDisableContainerGPU(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "valid container name",
+			containerName: "test-container",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := DisableContainerGPU(tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
 // Helper function for string contains check (similar to cmd tests)
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)

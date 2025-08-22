@@ -254,3 +254,136 @@ func TestPasswordGenerationConsistency(t *testing.T) {
 	}
 }
 
+func TestStoreContainerPassword(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		password      string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			password:      "testpass123",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "empty password",
+			containerName: "test-container",
+			password:      "",
+			expectedError: "password is required",
+		},
+		{
+			name:          "valid inputs",
+			containerName: "test-container",
+			password:      "testpass123",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := StoreContainerPassword(tt.containerName, tt.password)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestGetContainerPasswordAdditional(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "valid container name",
+			containerName: "test-container",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := GetContainerPassword(tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestSetUserPassword(t *testing.T) {
+	tests := []struct {
+		name          string
+		containerName string
+		username      string
+		password      string
+		expectedError string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			username:      "app",
+			password:      "testpass123",
+			expectedError: "container name is required",
+		},
+		{
+			name:          "empty username",
+			containerName: "test-container",
+			username:      "",
+			password:      "testpass123",
+			expectedError: "username is required",
+		},
+		{
+			name:          "empty password",
+			containerName: "test-container",
+			username:      "app",
+			password:      "",
+			expectedError: "password is required",
+		},
+		{
+			name:          "valid inputs",
+			containerName: "test-container",
+			username:      "app",
+			password:      "testpass123",
+			expectedError: "exec: \"lxc\": executable file not found in $PATH", // Expected in test environment
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := SetUserPassword(tt.containerName, tt.username, tt.password)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !strings.Contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}

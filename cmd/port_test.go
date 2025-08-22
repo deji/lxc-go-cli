@@ -10,12 +10,15 @@ import (
 
 // MockContainerPortManager for testing port command
 type MockContainerPortManager struct {
-	ContainerExistsFunc func(ctx context.Context, name string) bool
-	RunLXCCommandFunc   func(ctx context.Context, args ...string) error
-	ExistingContainers  map[string]bool
-	RunCommandError     error
-	Calls               map[string]int
-	LastCommand         []string
+	ContainerExistsFunc    func(ctx context.Context, name string) bool
+	RunLXCCommandFunc      func(ctx context.Context, args ...string) error
+	GetContainerConfigFunc func(ctx context.Context, containerName string) ([]byte, error)
+	ExistingContainers     map[string]bool
+	RunCommandError        error
+	GetConfigError         error
+	ContainerConfigs       map[string][]byte
+	Calls                  map[string]int
+	LastCommand            []string
 }
 
 func (m *MockContainerPortManager) ContainerExists(ctx context.Context, name string) bool {
@@ -41,6 +44,23 @@ func (m *MockContainerPortManager) RunLXCCommand(ctx context.Context, args ...st
 	return nil
 }
 
+func (m *MockContainerPortManager) GetContainerConfig(ctx context.Context, containerName string) ([]byte, error) {
+	m.trackCall("GetContainerConfig")
+	if m.GetContainerConfigFunc != nil {
+		return m.GetContainerConfigFunc(ctx, containerName)
+	}
+	if m.GetConfigError != nil {
+		return nil, m.GetConfigError
+	}
+	if m.ContainerConfigs != nil {
+		if config, exists := m.ContainerConfigs[containerName]; exists {
+			return config, nil
+		}
+	}
+	// Return empty config by default
+	return []byte("devices: {}"), nil
+}
+
 func (m *MockContainerPortManager) trackCall(method string) {
 	if m.Calls == nil {
 		m.Calls = make(map[string]int)
@@ -62,8 +82,8 @@ func TestPortCommand(t *testing.T) {
 	}
 
 	// Test port command properties
-	if portCmd.Use != "port <container-name> <host-port> <container-port> [tcp|udp|both]" {
-		t.Errorf("expected specific Use format, got '%s'", portCmd.Use)
+	if portCmd.Use != "port <add|list>" {
+		t.Errorf("expected 'port <add|list>', got '%s'", portCmd.Use)
 	}
 
 	if portCmd.Short == "" {
@@ -73,44 +93,87 @@ func TestPortCommand(t *testing.T) {
 	if portCmd.Long == "" {
 		t.Error("expected Long description to be set")
 	}
+
+	// Test subcommands exist
+	if portAddCmd == nil {
+		t.Fatal("portAddCmd should not be nil")
+	}
+
+	if portListCmd == nil {
+		t.Fatal("portListCmd should not be nil")
+	}
+
+	// Test port add command properties
+	if portAddCmd.Use != "add <container-name> <host-port> <container-port> [tcp|udp|both]" {
+		t.Errorf("expected specific Use format for add, got '%s'", portAddCmd.Use)
+	}
+
+	// Test port list command properties
+	if portListCmd.Use != "list <container-name>" {
+		t.Errorf("expected specific Use format for list, got '%s'", portListCmd.Use)
+	}
 }
 
-func TestPortCommandArgs(t *testing.T) {
-	// Test that the command expects 3-4 arguments
-	if portCmd.Args == nil {
-		t.Error("portCmd should have Args validation")
+func TestPortAddCommandArgs(t *testing.T) {
+	// Test that the port add command expects 3-4 arguments
+	if portAddCmd.Args == nil {
+		t.Error("portAddCmd should have Args validation")
 	}
 
 	// Test with wrong number of args
-	err := portCmd.Args(portCmd, []string{})
+	err := portAddCmd.Args(portAddCmd, []string{})
 	if err == nil {
 		t.Error("should fail with no arguments")
 	}
 
-	err = portCmd.Args(portCmd, []string{"container"})
+	err = portAddCmd.Args(portAddCmd, []string{"container"})
 	if err == nil {
 		t.Error("should fail with too few arguments")
 	}
 
-	err = portCmd.Args(portCmd, []string{"container", "host"})
+	err = portAddCmd.Args(portAddCmd, []string{"container", "host"})
 	if err == nil {
 		t.Error("should fail with too few arguments")
 	}
 
-	err = portCmd.Args(portCmd, []string{"container", "host", "container", "protocol", "extra"})
+	err = portAddCmd.Args(portAddCmd, []string{"container", "host", "container", "protocol", "extra"})
 	if err == nil {
 		t.Error("should fail with too many arguments")
 	}
 
 	// Test with correct number of args (should pass)
-	err = portCmd.Args(portCmd, []string{"container", "8080", "80"})
+	err = portAddCmd.Args(portAddCmd, []string{"container", "8080", "80"})
 	if err != nil {
 		t.Errorf("should pass with three arguments (protocol optional): %v", err)
 	}
 
-	err = portCmd.Args(portCmd, []string{"container", "8080", "80", "tcp"})
+	err = portAddCmd.Args(portAddCmd, []string{"container", "8080", "80", "tcp"})
 	if err != nil {
 		t.Errorf("should pass with four arguments: %v", err)
+	}
+}
+
+func TestPortListCommandArgs(t *testing.T) {
+	// Test that the port list command expects exactly 1 argument
+	if portListCmd.Args == nil {
+		t.Error("portListCmd should have Args validation")
+	}
+
+	// Test with wrong number of args
+	err := portListCmd.Args(portListCmd, []string{})
+	if err == nil {
+		t.Error("should fail with no arguments")
+	}
+
+	err = portListCmd.Args(portListCmd, []string{"container", "extra"})
+	if err == nil {
+		t.Error("should fail with too many arguments")
+	}
+
+	// Test with correct number of args (should pass)
+	err = portListCmd.Args(portListCmd, []string{"container"})
+	if err != nil {
+		t.Errorf("should pass with one argument: %v", err)
 	}
 }
 
@@ -364,7 +427,7 @@ func TestConfigurePortForwarding(t *testing.T) {
 				RunCommandError: tt.runCommandError,
 			}
 
-			err := configurePortForwarding(ctx, manager, tt.containerName, tt.hostPort, tt.containerPort, tt.protocol)
+			err := configurePortForwarding(ctx, manager, tt.containerName, tt.hostPort, tt.containerPort, tt.protocol, false)
 
 			if tt.expectedError != "" {
 				if err == nil {
@@ -398,7 +461,7 @@ func TestConfigurePortForwardingForProtocol(t *testing.T) {
 		},
 	}
 
-	err := configurePortForwardingForProtocol(ctx, manager, "test-container", "8080", "80", "tcp")
+	err := configurePortForwardingForProtocol(ctx, manager, "test-container", "8080", "80", "tcp", false)
 	if err != nil {
 		t.Errorf("should succeed: %v", err)
 	}
@@ -440,7 +503,7 @@ func TestConfigurePortForwardingBothProtocols(t *testing.T) {
 		},
 	}
 
-	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "both")
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "both", false)
 	if err != nil {
 		t.Errorf("should succeed: %v", err)
 	}
@@ -492,10 +555,24 @@ func TestDefaultContainerPortManager(t *testing.T) {
 }
 
 func TestPortCommandFlags(t *testing.T) {
-	// Test timeout flag
-	timeoutFlag := portCmd.Flags().Lookup("timeout")
+	// Test timeout flag on port add command
+	timeoutFlag := portAddCmd.Flags().Lookup("timeout")
 	if timeoutFlag == nil {
-		t.Error("timeout flag should exist")
+		t.Error("timeout flag should exist on portAddCmd")
+	}
+
+	if timeoutFlag.Shorthand != "t" {
+		t.Errorf("expected timeout flag shorthand to be 't', got '%s'", timeoutFlag.Shorthand)
+	}
+
+	if timeoutFlag.DefValue != "30s" {
+		t.Errorf("expected timeout flag default to be '30s', got '%s'", timeoutFlag.DefValue)
+	}
+
+	// Test timeout flag on port list command
+	timeoutFlag = portListCmd.Flags().Lookup("timeout")
+	if timeoutFlag == nil {
+		t.Error("timeout flag should exist on portListCmd")
 	}
 
 	if timeoutFlag.Shorthand != "t" {
@@ -516,7 +593,7 @@ func TestPortForwardingWithContext(t *testing.T) {
 
 	// Test with background context
 	ctx := context.Background()
-	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp")
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp", false)
 	if err != nil {
 		t.Errorf("should succeed with background context: %v", err)
 	}
@@ -526,7 +603,7 @@ func TestPortForwardingWithContext(t *testing.T) {
 	cancel() // Cancel immediately
 
 	// The function should still work since our mock doesn't respect context cancellation
-	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp")
+	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp", false)
 	if err != nil {
 		t.Errorf("should work with cancelled context in mock: %v", err)
 	}
@@ -538,7 +615,7 @@ func TestPortForwardingWithContext(t *testing.T) {
 	// Wait for timeout
 	time.Sleep(2 * time.Millisecond)
 
-	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp")
+	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp", false)
 	if err != nil {
 		t.Errorf("should work with expired timeout in mock: %v", err)
 	}
@@ -555,13 +632,13 @@ func TestPortForwardingEdgeCases(t *testing.T) {
 	}
 
 	// Test uppercase protocol
-	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "TCP")
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "TCP", false)
 	if err != nil {
 		t.Errorf("should handle uppercase protocol: %v", err)
 	}
 
 	// Test mixed case protocol
-	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "BoTh")
+	err = configurePortForwarding(ctx, manager, "test-container", "8080", "80", "BoTh", false)
 	if err != nil {
 		t.Errorf("should handle mixed case protocol: %v", err)
 	}
@@ -586,7 +663,7 @@ func TestPortForwardingPartialFailure(t *testing.T) {
 	}
 
 	// Test that if UDP fails when protocol is "both", the whole operation fails
-	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "both")
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "both", false)
 	if err == nil {
 		t.Error("should fail when second command fails")
 	}
@@ -605,7 +682,7 @@ func TestPortCommandWithDefaultProtocol(t *testing.T) {
 	}
 
 	// Test configuring port forwarding with empty protocol (should default to tcp)
-	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "")
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "", false)
 	if err != nil {
 		t.Errorf("should succeed with empty protocol: %v", err)
 	}
@@ -652,4 +729,435 @@ func TestDefaultContainerPortManagerEdgeCases(t *testing.T) {
 
 	err = manager.RunLXCCommand(ctx, "echo", "test")
 	t.Logf("RunLXCCommand with arguments returned: %v", err)
+
+	// Test GetContainerConfig with empty name
+	_, err = manager.GetContainerConfig(ctx, "")
+	if err == nil {
+		t.Error("should fail with empty container name")
+	}
+	if !contains(err.Error(), "container name is required") {
+		t.Errorf("expected 'container name is required' error, got: %v", err)
+	}
+}
+
+func TestPortForwardingWithForceFlag(t *testing.T) {
+	ctx := context.Background()
+	manager := &MockContainerPortManager{
+		ExistingContainers: map[string]bool{
+			"test-container": true,
+		},
+	}
+
+	// Test with force flag - should bypass port availability check
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp", true)
+	if err != nil {
+		t.Errorf("should succeed with force flag: %v", err)
+	}
+
+	// Test without force flag on a commonly used port (likely to be taken)
+	// This might fail in test environment due to port checking
+	err = configurePortForwarding(ctx, manager, "test-container", "80", "80", "tcp", false)
+	// We can't guarantee the result since it depends on the test environment
+	t.Logf("Port 80 availability check result: %v", err)
+}
+
+func TestPortAddCommandFlags(t *testing.T) {
+	// Test that the force flag exists
+	forceFlag := portAddCmd.Flags().Lookup("force")
+	if forceFlag == nil {
+		t.Error("force flag should exist on portAddCmd")
+	}
+
+	if forceFlag.Shorthand != "f" {
+		t.Errorf("expected force flag shorthand to be 'f', got '%s'", forceFlag.Shorthand)
+	}
+
+	if forceFlag.DefValue != "false" {
+		t.Errorf("expected force flag default to be 'false', got '%s'", forceFlag.DefValue)
+	}
+}
+
+func TestPortAvailabilityIntegration(t *testing.T) {
+	// Test that port availability checking is working in the command flow
+	ctx := context.Background()
+	
+	// Create a mock that simulates port availability checking
+	manager := &MockContainerPortManager{
+		ExistingContainers: map[string]bool{
+			"test-container": true,
+		},
+		RunLXCCommandFunc: func(ctx context.Context, args ...string) error {
+			// Simulate successful LXC command
+			return nil
+		},
+	}
+
+	// Test with a very high port number that should be available
+	err := configurePortForwarding(ctx, manager, "test-container", "65000", "80", "tcp", false)
+	if err != nil {
+		t.Errorf("should succeed with high port number: %v", err)
+	}
+
+	// Test force flag bypasses the check completely
+	err = configurePortForwarding(ctx, manager, "test-container", "80", "80", "tcp", true)
+	if err != nil {
+		t.Errorf("should succeed with force flag even on low port: %v", err)
+	}
+}
+
+func TestListPortForwarding(t *testing.T) {
+	tests := []struct {
+		name            string
+		containerName   string
+		containerExists bool
+		configData      string
+		configError     error
+		expectedError   string
+		expectedOutput  string
+	}{
+		{
+			name:          "empty container name",
+			containerName: "",
+			expectedError: "container name is required",
+		},
+		{
+			name:            "container does not exist",
+			containerName:   "nonexistent",
+			containerExists: false,
+			expectedError:   "container 'nonexistent' does not exist",
+		},
+		{
+			name:            "config error",
+			containerName:   "test-container",
+			containerExists: true,
+			configError:     fmt.Errorf("config command failed"),
+			expectedError:   "failed to get container configuration",
+		},
+		{
+			name:            "no port mappings",
+			containerName:   "test-container",
+			containerExists: true,
+			configData:      "devices: {}",
+			expectedOutput:  "No port forwarding rules found for container 'test-container'",
+		},
+		{
+			name:            "valid port mappings",
+			containerName:   "test-container",
+			containerExists: true,
+			configData: `devices:
+  test-container-8080-80-tcp:
+    type: proxy
+    connect: tcp:0.0.0.0:8080
+    listen: tcp:0.0.0.0:80
+  test-container-5432-5432-udp:
+    type: proxy
+    connect: udp:127.0.0.1:5432
+    listen: udp:0.0.0.0:5432
+  non-port-device:
+    type: disk
+    path: /mnt`,
+			expectedOutput: "Port mappings for container 'test-container':",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			manager := &MockContainerPortManager{
+				ExistingContainers: map[string]bool{
+					"test-container": tt.containerExists,
+				},
+				ContainerConfigs: map[string][]byte{
+					"test-container": []byte(tt.configData),
+				},
+				GetConfigError: tt.configError,
+			}
+
+			err := listPortForwarding(ctx, manager, tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestParsePortMappingsFromConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		yamlData      string
+		containerName string
+		expectedCount int
+		expectedError string
+	}{
+		{
+			name:          "invalid yaml",
+			yamlData:      "invalid: yaml: content:",
+			containerName: "test-container",
+			expectedError: "failed to parse container configuration",
+		},
+		{
+			name:          "empty devices",
+			yamlData:      "devices: {}",
+			containerName: "test-container",
+			expectedCount: 0,
+		},
+		{
+			name: "valid port mappings",
+			yamlData: `devices:
+  test-container-8080-80-tcp:
+    type: proxy
+    connect: tcp:0.0.0.0:8080
+    listen: tcp:0.0.0.0:80
+  test-container-5432-5432-udp:
+    type: proxy
+    connect: udp:127.0.0.1:5432
+    listen: udp:0.0.0.0:5432
+  non-port-device:
+    type: disk
+    path: /mnt
+  other-container-8080-80-tcp:
+    type: proxy
+    connect: tcp:0.0.0.0:8080
+    listen: tcp:0.0.0.0:80`,
+			containerName: "test-container",
+			expectedCount: 2, // Only devices matching container name
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mappings, err := parsePortMappingsFromConfig([]byte(tt.yamlData), tt.containerName)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			} else if len(mappings) != tt.expectedCount {
+				t.Errorf("expected %d mappings, got %d", tt.expectedCount, len(mappings))
+			}
+		})
+	}
+}
+
+func TestIsPortDevice(t *testing.T) {
+	tests := []struct {
+		name          string
+		deviceName    string
+		containerName string
+		expected      bool
+	}{
+		{
+			name:          "valid tcp device",
+			deviceName:    "test-container-8080-80-tcp",
+			containerName: "test-container",
+			expected:      true,
+		},
+		{
+			name:          "valid udp device",
+			deviceName:    "test-container-5432-5432-udp",
+			containerName: "test-container",
+			expected:      true,
+		},
+		{
+			name:          "wrong container name",
+			deviceName:    "other-container-8080-80-tcp",
+			containerName: "test-container",
+			expected:      false,
+		},
+		{
+			name:          "invalid protocol",
+			deviceName:    "test-container-8080-80-http",
+			containerName: "test-container",
+			expected:      false,
+		},
+		{
+			name:          "invalid format - too few parts",
+			deviceName:    "test-container-8080-tcp",
+			containerName: "test-container",
+			expected:      false,
+		},
+		{
+			name:          "invalid format - non-numeric port",
+			deviceName:    "test-container-abc-80-tcp",
+			containerName: "test-container",
+			expected:      false,
+		},
+		{
+			name:          "container name with special chars",
+			deviceName:    "test-container-2-8080-80-tcp",
+			containerName: "test-container-2",
+			expected:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isPortDevice(tt.deviceName, tt.containerName)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestParsePortMapping(t *testing.T) {
+	tests := []struct {
+		name          string
+		deviceName    string
+		device        Device
+		expectedPort  *PortMapping
+		expectedError string
+	}{
+		{
+			name:       "valid tcp mapping",
+			deviceName: "test-container-8080-80-tcp",
+			device: Device{
+				Type:    "proxy",
+				Connect: "tcp:0.0.0.0:8080",
+				Listen:  "tcp:0.0.0.0:80",
+			},
+			expectedPort: &PortMapping{
+				DeviceName:    "test-container-8080-80-tcp",
+				Protocol:      "TCP",
+				HostPort:      "8080",
+				ContainerPort: "80",
+				HostIP:        "0.0.0.0",
+				ContainerIP:   "0.0.0.0",
+			},
+		},
+		{
+			name:       "valid udp mapping with different IPs",
+			deviceName: "test-container-5432-5432-udp",
+			device: Device{
+				Type:    "proxy",
+				Connect: "udp:127.0.0.1:5432",
+				Listen:  "udp:192.168.1.1:5432",
+			},
+			expectedPort: &PortMapping{
+				DeviceName:    "test-container-5432-5432-udp",
+				Protocol:      "UDP",
+				HostPort:      "5432",
+				ContainerPort: "5432",
+				HostIP:        "127.0.0.1",
+				ContainerIP:   "192.168.1.1",
+			},
+		},
+		{
+			name:          "invalid device name format",
+			deviceName:    "invalid-format",
+			device:        Device{Type: "proxy"},
+			expectedError: "invalid device name format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mapping, err := parsePortMapping(tt.deviceName, tt.device)
+
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Errorf("expected error containing '%s', got nil", tt.expectedError)
+				} else if !contains(err.Error(), tt.expectedError) {
+					t.Errorf("expected error containing '%s', got '%s'", tt.expectedError, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error, got %v", err)
+			} else {
+				if mapping.DeviceName != tt.expectedPort.DeviceName {
+					t.Errorf("expected DeviceName '%s', got '%s'", tt.expectedPort.DeviceName, mapping.DeviceName)
+				}
+				if mapping.Protocol != tt.expectedPort.Protocol {
+					t.Errorf("expected Protocol '%s', got '%s'", tt.expectedPort.Protocol, mapping.Protocol)
+				}
+				if mapping.HostPort != tt.expectedPort.HostPort {
+					t.Errorf("expected HostPort '%s', got '%s'", tt.expectedPort.HostPort, mapping.HostPort)
+				}
+				if mapping.ContainerPort != tt.expectedPort.ContainerPort {
+					t.Errorf("expected ContainerPort '%s', got '%s'", tt.expectedPort.ContainerPort, mapping.ContainerPort)
+				}
+				if mapping.HostIP != tt.expectedPort.HostIP {
+					t.Errorf("expected HostIP '%s', got '%s'", tt.expectedPort.HostIP, mapping.HostIP)
+				}
+				if mapping.ContainerIP != tt.expectedPort.ContainerIP {
+					t.Errorf("expected ContainerIP '%s', got '%s'", tt.expectedPort.ContainerIP, mapping.ContainerIP)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatPortMappings(t *testing.T) {
+	tests := []struct {
+		name     string
+		mappings []PortMapping
+		expected string
+	}{
+		{
+			name:     "empty mappings",
+			mappings: []PortMapping{},
+			expected: "",
+		},
+		{
+			name: "single mapping",
+			mappings: []PortMapping{
+				{
+					DeviceName:    "test-container-8080-80-tcp",
+					Protocol:      "TCP",
+					HostPort:      "8080",
+					ContainerPort: "80",
+					HostIP:        "0.0.0.0",
+					ContainerIP:   "0.0.0.0",
+				},
+			},
+			expected: "PROTOCOL  HOST PORT  CONTAINER PORT  HOST IP      CONTAINER IP  DEVICE NAME",
+		},
+		{
+			name: "multiple mappings",
+			mappings: []PortMapping{
+				{
+					DeviceName:    "test-container-8080-80-tcp",
+					Protocol:      "TCP",
+					HostPort:      "8080",
+					ContainerPort: "80",
+					HostIP:        "0.0.0.0",
+					ContainerIP:   "0.0.0.0",
+				},
+				{
+					DeviceName:    "test-container-5432-5432-udp",
+					Protocol:      "UDP",
+					HostPort:      "5432",
+					ContainerPort: "5432",
+					HostIP:        "127.0.0.1",
+					ContainerIP:   "192.168.1.1",
+				},
+			},
+			expected: "PROTOCOL  HOST PORT  CONTAINER PORT  HOST IP      CONTAINER IP  DEVICE NAME",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatPortMappings(tt.mappings)
+			if tt.expected == "" {
+				if result != "" {
+					t.Errorf("expected empty string, got '%s'", result)
+				}
+			} else {
+				if !contains(result, tt.expected) {
+					t.Errorf("expected result to contain '%s', got '%s'", tt.expected, result)
+				}
+			}
+		})
+	}
 }

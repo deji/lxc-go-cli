@@ -224,7 +224,8 @@ func TestLogLevelFlagInPortCommand(t *testing.T) {
 	th.SetLevel(logger.INFO)
 	th.ClearOutput()
 
-	err := configurePortForwarding(nil, manager, "test-container", "8080", "80", "tcp")
+	ctx := context.Background()
+	err := configurePortForwarding(ctx, manager, "test-container", "8080", "80", "tcp", false)
 	if err != nil {
 		t.Errorf("configurePortForwarding should succeed: %v", err)
 	}
@@ -237,7 +238,7 @@ func TestLogLevelFlagInPortCommand(t *testing.T) {
 	th.SetLevel(logger.ERROR)
 	th.ClearOutput()
 
-	err = configurePortForwarding(nil, manager, "test-container", "9090", "90", "udp")
+	err = configurePortForwarding(ctx, manager, "test-container", "9090", "90", "udp", false)
 	if err != nil {
 		t.Errorf("configurePortForwarding should succeed: %v", err)
 	}
