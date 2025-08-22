@@ -15,6 +15,8 @@ type MockContainerManager struct {
 	ConfigureContainerSecurityFunc func(containerName string) error
 	RunInContainerFunc             func(containerName string, args ...string) error
 	RestartContainerFunc           func(name string) error
+	StoreContainerPasswordFunc     func(containerName, password string) error
+	SetUserPasswordFunc            func(containerName, username, password string) error
 }
 
 func (m *MockContainerManager) GetOrCreateBtrfsPool() (string, error) {
@@ -57,6 +59,20 @@ func (m *MockContainerManager) RestartContainer(name string) error {
 		return m.RestartContainerFunc(name)
 	}
 	return fmt.Errorf("RestartContainer not mocked")
+}
+
+func (m *MockContainerManager) StoreContainerPassword(containerName, password string) error {
+	if m.StoreContainerPasswordFunc != nil {
+		return m.StoreContainerPasswordFunc(containerName, password)
+	}
+	return nil // Default to success for password storage
+}
+
+func (m *MockContainerManager) SetUserPassword(containerName, username, password string) error {
+	if m.SetUserPasswordFunc != nil {
+		return m.SetUserPasswordFunc(containerName, username, password)
+	}
+	return nil // Default to success for password setting
 }
 
 func TestCreateCommand(t *testing.T) {

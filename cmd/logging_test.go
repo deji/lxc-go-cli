@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yourusername/lxc-go-cli/internal/logger"
+	"github.com/deji/lxc-go-cli/internal/logger"
 )
 
 func TestRootCommandLogLevelFlag(t *testing.T) {

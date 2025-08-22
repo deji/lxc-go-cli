@@ -6,9 +6,9 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/deji/lxc-go-cli/internal/helpers"
+	"github.com/deji/lxc-go-cli/internal/logger"
 	"github.com/spf13/cobra"
-	"github.com/yourusername/lxc-go-cli/internal/helpers"
-	"github.com/yourusername/lxc-go-cli/internal/logger"
 )
 
 var (
@@ -25,6 +25,8 @@ type ContainerManager interface {
 	ConfigureContainerSecurity(containerName string) error
 	RunInContainer(containerName string, args ...string) error
 	RestartContainer(name string) error
+	StoreContainerPassword(containerName, password string) error
+	SetUserPassword(containerName, username, password string) error
 }
 
 // DefaultContainerManager implements ContainerManager using helpers
@@ -52,6 +54,14 @@ func (d *DefaultContainerManager) RunInContainer(containerName string, args ...s
 
 func (d *DefaultContainerManager) RestartContainer(name string) error {
 	return helpers.RestartContainer(name)
+}
+
+func (d *DefaultContainerManager) StoreContainerPassword(containerName, password string) error {
+	return helpers.StoreContainerPassword(containerName, password)
+}
+
+func (d *DefaultContainerManager) SetUserPassword(containerName, username, password string) error {
+	return helpers.SetUserPassword(containerName, username, password)
 }
 
 // createContainer creates a container with the given parameters
@@ -110,14 +120,33 @@ func createContainer(manager ContainerManager, name, image, size string) error {
 		return fmt.Errorf("failed to install Docker and Docker Compose: %w", err)
 	}
 
+	// Generate secure password for 'app' user
+	password := helpers.GenerateSecurePassword()
+	logger.Info("Generated secure password for 'app' user: %s", password)
+	logger.Info("IMPORTANT: Save this password - you'll need it for sudo access in the container!")
+
 	// Create 'app' user and add to docker and sudo groups
 	logger.Debug("Creating 'app' user...")
 	if err := manager.RunInContainer(name, "useradd", "-m", "-s", "/bin/bash", "app"); err != nil {
 		return fmt.Errorf("failed to create 'app' user: %w", err)
 	}
+
+	// Set password for 'app' user
+	logger.Debug("Setting password for 'app' user...")
+	if err := manager.SetUserPassword(name, "app", password); err != nil {
+		return fmt.Errorf("failed to set password for 'app' user: %w", err)
+	}
+
 	logger.Debug("Adding 'app' user to docker and sudo groups...")
 	if err := manager.RunInContainer(name, "usermod", "-aG", "docker,sudo", "app"); err != nil {
 		return fmt.Errorf("failed to add 'app' user to docker and sudo groups: %w", err)
+	}
+
+	// Store password in container metadata for later retrieval
+	logger.Debug("Storing password in container metadata...")
+	if err := manager.StoreContainerPassword(name, password); err != nil {
+		logger.Debug("Warning: Failed to store password in metadata: %v", err)
+		// Don't fail the entire operation if password storage fails
 	}
 
 	// Restart container to ensure all settings take effect

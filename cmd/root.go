@@ -6,8 +6,8 @@ package cmd
 import (
 	"os"
 
+	"github.com/deji/lxc-go-cli/internal/logger"
 	"github.com/spf13/cobra"
-	"github.com/yourusername/lxc-go-cli/internal/logger"
 )
 
 var (

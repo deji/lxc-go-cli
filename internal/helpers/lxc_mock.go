@@ -16,6 +16,8 @@ type MockLXC struct {
 	DefaultPoolType    string
 	ExistingPools      []string
 	ExistingContainers map[string]bool
+	GPUStates          map[string]*GPUStatus
+	Passwords          map[string]string
 
 	// Error injection
 	CreatePoolError       error
@@ -25,6 +27,12 @@ type MockLXC struct {
 	RunCommandError       error
 	SecurityConfigError   error
 	SetDefaultPoolError   error
+	GPUStatusError        error
+	EnableGPUError        error
+	DisableGPUError       error
+	StorePasswordError    error
+	GetPasswordError      error
+	SetPasswordError      error
 
 	// Call tracking
 	Calls map[string]int
@@ -37,6 +45,8 @@ func NewMockLXC() *MockLXC {
 		DefaultPoolType:    "btrfs",
 		ExistingPools:      []string{"default-btrfs", "test-pool"},
 		ExistingContainers: make(map[string]bool),
+		GPUStates:          make(map[string]*GPUStatus),
+		Passwords:          make(map[string]string),
 		Calls:              make(map[string]int),
 	}
 }
@@ -349,6 +359,138 @@ func (m *MockLXC) SetBtrfsAvailable(available bool) {
 	m.BtrfsAvailable = available
 }
 
+// GetContainerGPUStatus retrieves the GPU configuration status for a container
+func (m *MockLXC) GetContainerGPUStatus(ctx context.Context, containerName string) (*GPUStatus, error) {
+	m.trackCall("GetContainerGPUStatus")
+
+	if m.GPUStatusError != nil {
+		return nil, m.GPUStatusError
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Return the configured state or default (disabled)
+	if status, exists := m.GPUStates[containerName]; exists {
+		// Return a copy to prevent modification
+		return &GPUStatus{
+			HasGPUDevice:   status.HasGPUDevice,
+			PrivilegedMode: status.PrivilegedMode,
+		}, nil
+	}
+
+	// Default state - GPU disabled
+	return &GPUStatus{
+		HasGPUDevice:   false,
+		PrivilegedMode: false,
+	}, nil
+}
+
+// EnableContainerGPU enables GPU access for a container
+func (m *MockLXC) EnableContainerGPU(ctx context.Context, containerName string) error {
+	m.trackCall("EnableContainerGPU")
+
+	if m.EnableGPUError != nil {
+		return m.EnableGPUError
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Set GPU enabled state
+	m.GPUStates[containerName] = &GPUStatus{
+		HasGPUDevice:   true,
+		PrivilegedMode: true,
+	}
+
+	return nil
+}
+
+// DisableContainerGPU disables GPU access for a container
+func (m *MockLXC) DisableContainerGPU(ctx context.Context, containerName string) error {
+	m.trackCall("DisableContainerGPU")
+
+	if m.DisableGPUError != nil {
+		return m.DisableGPUError
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Set GPU disabled state
+	m.GPUStates[containerName] = &GPUStatus{
+		HasGPUDevice:   false,
+		PrivilegedMode: false,
+	}
+
+	return nil
+}
+
+// SetGPUState sets the GPU state for a container (for testing)
+func (m *MockLXC) SetGPUState(containerName string, hasGPU, privileged bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.GPUStates[containerName] = &GPUStatus{
+		HasGPUDevice:   hasGPU,
+		PrivilegedMode: privileged,
+	}
+}
+
+// StoreContainerPassword stores password in mock storage
+func (m *MockLXC) StoreContainerPassword(ctx context.Context, containerName, password string) error {
+	m.trackCall("StoreContainerPassword")
+
+	if m.StorePasswordError != nil {
+		return m.StorePasswordError
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Passwords[containerName] = password
+	return nil
+}
+
+// GetContainerPassword retrieves password from mock storage
+func (m *MockLXC) GetContainerPassword(ctx context.Context, containerName string) (string, error) {
+	m.trackCall("GetContainerPassword")
+
+	if m.GetPasswordError != nil {
+		return "", m.GetPasswordError
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	password, exists := m.Passwords[containerName]
+	if !exists {
+		return "", fmt.Errorf("no password found for container '%s'", containerName)
+	}
+
+	return password, nil
+}
+
+// SetUserPassword sets password for a user in mock container
+func (m *MockLXC) SetUserPassword(ctx context.Context, containerName, username, password string) error {
+	m.trackCall("SetUserPassword")
+
+	if m.SetPasswordError != nil {
+		return m.SetPasswordError
+	}
+
+	// In mock, we just simulate success
+	return nil
+}
+
+// SetPassword sets a password for a container (for testing)
+func (m *MockLXC) SetPassword(containerName, password string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.Passwords[containerName] = password
+}
+
 // SetError sets an error for a specific operation
 func (m *MockLXC) SetError(operation string, err error) {
 	m.mu.Lock()
@@ -369,5 +511,17 @@ func (m *MockLXC) SetError(operation string, err error) {
 		m.SecurityConfigError = err
 	case "setdefaultpool":
 		m.SetDefaultPoolError = err
+	case "gpustatus":
+		m.GPUStatusError = err
+	case "enablegpu":
+		m.EnableGPUError = err
+	case "disablegpu":
+		m.DisableGPUError = err
+	case "storepassword":
+		m.StorePasswordError = err
+	case "getpassword":
+		m.GetPasswordError = err
+	case "setpassword":
+		m.SetPasswordError = err
 	}
 }

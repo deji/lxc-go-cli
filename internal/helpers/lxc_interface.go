@@ -22,6 +22,16 @@ type LXCInterface interface {
 	RestartContainer(ctx context.Context, name string) error
 	RunInContainer(ctx context.Context, containerName string, args ...string) error
 	ConfigureContainerSecurity(ctx context.Context, containerName string) error
+
+	// GPU operations
+	GetContainerGPUStatus(ctx context.Context, containerName string) (*GPUStatus, error)
+	EnableContainerGPU(ctx context.Context, containerName string) error
+	DisableContainerGPU(ctx context.Context, containerName string) error
+
+	// Password operations
+	StoreContainerPassword(ctx context.Context, containerName, password string) error
+	GetContainerPassword(ctx context.Context, containerName string) (string, error)
+	SetUserPassword(ctx context.Context, containerName, username, password string) error
 }
 
 // RealLXC implements LXCInterface using actual LXC commands
@@ -95,4 +105,34 @@ func (r *RealLXC) RunInContainer(ctx context.Context, containerName string, args
 // ConfigureContainerSecurity sets up security settings needed for Docker
 func (r *RealLXC) ConfigureContainerSecurity(ctx context.Context, containerName string) error {
 	return ConfigureContainerSecurity(containerName)
+}
+
+// GetContainerGPUStatus retrieves the GPU configuration status for a container
+func (r *RealLXC) GetContainerGPUStatus(ctx context.Context, containerName string) (*GPUStatus, error) {
+	return GetContainerGPUStatus(containerName)
+}
+
+// EnableContainerGPU enables GPU access for a container
+func (r *RealLXC) EnableContainerGPU(ctx context.Context, containerName string) error {
+	return EnableContainerGPU(containerName)
+}
+
+// DisableContainerGPU disables GPU access for a container
+func (r *RealLXC) DisableContainerGPU(ctx context.Context, containerName string) error {
+	return DisableContainerGPU(containerName)
+}
+
+// StoreContainerPassword stores password in LXC metadata
+func (r *RealLXC) StoreContainerPassword(ctx context.Context, containerName, password string) error {
+	return StoreContainerPassword(containerName, password)
+}
+
+// GetContainerPassword retrieves password from LXC metadata
+func (r *RealLXC) GetContainerPassword(ctx context.Context, containerName string) (string, error) {
+	return GetContainerPassword(containerName)
+}
+
+// SetUserPassword sets the password for a user inside a container
+func (r *RealLXC) SetUserPassword(ctx context.Context, containerName, username, password string) error {
+	return SetUserPassword(containerName, username, password)
 }

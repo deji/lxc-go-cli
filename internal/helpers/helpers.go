@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/yourusername/lxc-go-cli/internal/logger"
+	"github.com/deji/lxc-go-cli/internal/logger"
 )
 
 // ParseImageString parses an image string in format "distro:release:arch"

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/yourusername/lxc-go-cli/internal/logger"
+	"github.com/deji/lxc-go-cli/internal/logger"
 )
 
 // Helper function to check if string contains substring

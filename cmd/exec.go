@@ -10,9 +10,9 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/deji/lxc-go-cli/internal/helpers"
+	"github.com/deji/lxc-go-cli/internal/logger"
 	"github.com/spf13/cobra"
-	"github.com/yourusername/lxc-go-cli/internal/helpers"
-	"github.com/yourusername/lxc-go-cli/internal/logger"
 )
 
 var (
