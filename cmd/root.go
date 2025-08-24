@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Short: "lxc cli tool to create and manage containers running docker",
 	Long: `lxc-go-cli is a cli tool to create and manage containers for docker.
 	It is a wrapper around the lxc cli tool to create and manage containers with the
-	btrfs storage backend. Docker and docker-compose are installed in the container too.`,
+	btrfs storage backend. Docker and Docker Compose V2 are installed from Docker's official repository.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Initialize logging level from flag
 		logger.SetLevelFromString(logLevel)

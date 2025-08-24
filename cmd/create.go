@@ -114,10 +114,10 @@ func createContainer(manager ContainerManager, name, image, size string) error {
 		return fmt.Errorf("failed to update package index: %w", err)
 	}
 
-	// Install Docker and Docker Compose
-	logger.Debug("Installing Docker and Docker Compose...")
-	if err := manager.RunInContainer(name, "apt-get", "install", "-y", "docker.io", "docker-compose"); err != nil {
-		return fmt.Errorf("failed to install Docker and Docker Compose: %w", err)
+	// Install Docker and Docker Compose V2
+	logger.Debug("Installing Docker and Docker Compose V2...")
+	if err := helpers.InstallDockerInContainer(manager, name); err != nil {
+		return fmt.Errorf("failed to install Docker: %w", err)
 	}
 
 	// Generate secure password for 'app' user
@@ -163,7 +163,7 @@ func createContainer(manager ContainerManager, name, image, size string) error {
 var createCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an LXC container ready for Docker use",
-	Long: `Creates an LXC container, installs Docker and Docker Compose, and sets up a non-root 'app' user with docker and sudo access.
+	Long: `Creates an LXC container, installs Docker and Docker Compose V2 from Docker's official repository, and sets up a non-root 'app' user with docker and sudo access.
 
 Example:
   lxc-go-cli create --name mycontainer --image ubuntu:24.04 --size 10G`,

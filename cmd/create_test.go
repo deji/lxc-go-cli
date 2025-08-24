@@ -353,7 +353,7 @@ func TestCreateContainerDockerInstallError(t *testing.T) {
 	if err == nil {
 		t.Error("expected error, got nil")
 	}
-	if !contains(err.Error(), "failed to install Docker and Docker Compose") {
+	if !contains(err.Error(), "failed to install Docker") {
 		t.Errorf("expected error about docker installation, got '%s'", err.Error())
 	}
 }

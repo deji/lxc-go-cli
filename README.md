@@ -4,7 +4,7 @@ A command-line tool for creating and managing LXC containers optimized for Docke
 
 ## Features
 
-- **Container Creation**: Create LXC containers with Docker and Docker Compose pre-installed
+- **Container Creation**: Create LXC containers with Docker and Docker Compose V2 from Docker's official repository
 - **Btrfs Storage**: Automatic Btrfs storage pool management for optimal performance
 - **Interactive Shell**: Execute commands in containers as the `app` user
 - **Port Forwarding**: Configure TCP/UDP port forwarding between host and container
@@ -14,35 +14,38 @@ A command-line tool for creating and managing LXC containers optimized for Docke
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lxc-go-cli.git
+git clone https://github.com/deji/lxc-go-cli.git
 cd lxc-go-cli
 
 # Build the binary
 make build
-# or
-go build -o lxc-go-cli .
 ```
 
 ## Quick Start
 
 ```bash
-# Create a new container
-./lxc-go-cli create --name mycontainer --image ubuntu:24.04
+# Create a new container based on Ubuntu 24.04 LTS
+./lxc-go-cli create --name mycontainer
 
 # Execute shell in container
 ./lxc-go-cli exec mycontainer
 
-# Configure port forwarding
-./lxc-go-cli port mycontainer 8080 80 tcp
+# Add port forwarding
+./lxc-go-cli port add mycontainer 8080 80 tcp
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `create` | Create LXC container with Docker support |
+| `create` | Create LXC container with Docker and Compose V2 support |
 | `exec` | Execute interactive shell as app user |
-| `port` | Configure port forwarding (TCP/UDP/both) |
+| `port add` | Add port forwarding rules for containers |
+| `port list` | List existing port forwarding rules |
+| `gpu` | Configure GPU access for containers (enable/disable/status) |
+| `password` | Retrieve stored 'app' user password for container |
+| `version` | Display version information |
+| `completion` | Generate shell autocompletion scripts |
 
 ## Usage Examples
 
@@ -57,11 +60,47 @@ lxc-go-cli create --name web-server --image ubuntu:22.04 --size 20G
 
 ### Port Forwarding
 ```bash
-# HTTP traffic
-lxc-go-cli port web-server 8080 80
+# Add TCP port forwarding (default protocol)
+lxc-go-cli port add web-server 8080 80
 
-# Database with both protocols
-lxc-go-cli port db-server 5432 5432 both
+# Add UDP port forwarding
+lxc-go-cli port add db-server 5432 5432 udp
+
+# Add both TCP and UDP protocols
+lxc-go-cli port add app-server 3000 3000 both
+
+# List existing port mappings
+lxc-go-cli port list web-server
+
+# Force port mapping (even if port appears in use)
+lxc-go-cli port add web-server 8080 80 --force
+```
+
+### GPU Access
+```bash
+# Enable GPU access for container
+lxc-go-cli gpu dev-container enable
+
+# Check GPU status
+lxc-go-cli gpu dev-container status
+
+# Disable GPU access
+lxc-go-cli gpu dev-container disable
+```
+
+### Password Management
+```bash
+# Retrieve app user password for container
+lxc-go-cli password mycontainer
+```
+
+### Version Information
+```bash
+# Show version
+lxc-go-cli version
+
+# Show detailed version information
+lxc-go-cli version --detailed
 ```
 
 ### Debugging
